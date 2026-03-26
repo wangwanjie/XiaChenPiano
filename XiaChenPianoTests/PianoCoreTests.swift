@@ -183,4 +183,27 @@ struct PianoCoreTests {
         #expect(lookupOrder == [nil, "Sound", "Resources/Sound"])
     }
 
+    @Test
+    func sampleCacheSupportsConcurrentReadsAndWrites() {
+        let cache = AudioSampleCache()
+        let expected = Data("piano111".utf8)
+        let group = DispatchGroup()
+
+        for index in 0..<64 {
+            group.enter()
+            DispatchQueue.global().async {
+                if index.isMultiple(of: 2) {
+                    cache.store(expected, for: "piano111")
+                } else {
+                    _ = cache.data(for: "piano111")
+                }
+                group.leave()
+            }
+        }
+
+        group.wait()
+
+        #expect(cache.data(for: "piano111") == expected)
+    }
+
 }

@@ -8,10 +8,22 @@
 import AVFAudio
 import Foundation
 
+final class AudioSampleCache {
+    private let cache = NSCache<NSString, NSData>()
+
+    func data(for resourceName: String) -> Data? {
+        cache.object(forKey: resourceName as NSString) as Data?
+    }
+
+    func store(_ data: Data, for resourceName: String) {
+        cache.setObject(data as NSData, forKey: resourceName as NSString)
+    }
+}
+
 final class SampledSoundPlayer {
     typealias ResourceLookup = (_ resourceName: String, _ fileExtension: String, _ subdirectory: String?) -> URL?
 
-    private var sampleDataCache: [String: Data] = [:]
+    private let sampleDataCache = AudioSampleCache()
     private var activePlayers: [AVAudioPlayer] = []
     private var scheduledPlaybackItems: [DispatchWorkItem] = []
     private var metronomeTimer: Timer?
@@ -89,7 +101,7 @@ final class SampledSoundPlayer {
     }
 
     private func loadSampleData(named resourceName: String) -> Data? {
-        if let cached = sampleDataCache[resourceName] {
+        if let cached = sampleDataCache.data(for: resourceName) {
             return cached
         }
 
@@ -100,7 +112,7 @@ final class SampledSoundPlayer {
 #endif
             return nil
         }
-        sampleDataCache[resourceName] = data
+        sampleDataCache.store(data, for: resourceName)
         return data
     }
 
