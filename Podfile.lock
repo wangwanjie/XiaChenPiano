@@ -1,0 +1,18 @@
+PODS:
+  - LookinServer/Core (1.2.8)
+  - LookinServer/SwiftAndNoHook (1.2.8):
+    - LookinServer/Core
+
+DEPENDENCIES:
+  - LookinServer/SwiftAndNoHook (from `/Users/VanJay/Documents/Work/Private/Lookin-AppKit/LookinServer`)
+
+EXTERNAL SOURCES:
+  LookinServer:
+    :path: "/Users/VanJay/Documents/Work/Private/Lookin-AppKit/LookinServer"
+
+SPEC CHECKSUMS:
+  LookinServer: 32e176f3ef9dfbda52026e2d9e18b7204c141272
+
+PODFILE CHECKSUM: c853d8477546a76810da94eb796e2461b0ca2210
+
+COCOAPODS: 1.16.2
