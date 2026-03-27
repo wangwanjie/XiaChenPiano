@@ -11,7 +11,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
 
-
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else {
             return
@@ -21,6 +20,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.rootViewController = PianoPracticeViewController()
         window.makeKeyAndVisible()
         self.window = window
+        forceInitialOrientation(for: windowScene)
+    }
+
+    private func forceInitialOrientation(for windowScene: UIWindowScene) {
+        if #available(iOS 16.0, *) {
+            let preferences = UIWindowScene.GeometryPreferences.iOS(interfaceOrientations: .landscapeRight)
+            windowScene.requestGeometryUpdate(preferences)
+            window?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+        } else {
+            UIDevice.current.setValue(UIInterfaceOrientation.landscapeRight.rawValue, forKey: "orientation")
+            UIViewController.attemptRotationToDeviceOrientation()
+        }
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

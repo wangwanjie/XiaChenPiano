@@ -7,6 +7,7 @@
 
 import Foundation
 import Testing
+import UIKit
 @testable import XiaChenPiano
 
 struct PianoCoreTests {
@@ -260,6 +261,62 @@ struct PianoCoreTests {
         #expect(abs(timeline.progress - 0.15) < 0.0001)
         #expect(replayStep.triggeredNotes.map(\.sampleCode) == ["111"])
         #expect(replayStep.isFinished == false)
+    }
+
+    @MainActor
+    @Test
+    func recordingListCardFitsWithinLandscapeViewport() throws {
+        let recording = MelodyRecording(
+            title: "横屏测试录音",
+            createdAt: Date(),
+            duration: 12,
+            events: [RecordedNoteEvent(note: PianoNote(sampleCode: "111")!, offset: 0.1)]
+        )
+        let viewController = RecordingListViewController(recordings: [recording])
+
+        viewController.loadViewIfNeeded()
+
+        let mirror = Mirror(reflecting: viewController)
+        let cardView = try #require(mirror.descendant("cardView") as? UIView)
+        let externalConstraints = viewController.view.constraints.filter { constraint in
+            (constraint.firstItem as AnyObject?) === cardView || (constraint.secondItem as AnyObject?) === cardView
+        }
+        let constraints = externalConstraints + cardView.constraints
+
+        let hasRequiredFixedHeight = constraints.contains { constraint in
+            let cardIsHeightItem =
+                ((constraint.firstItem as AnyObject?) === cardView && constraint.firstAttribute == .height) ||
+                ((constraint.secondItem as AnyObject?) === cardView && constraint.secondAttribute == .height) ||
+                (constraint.firstItem == nil && constraint.secondItem == nil && constraint.firstAttribute == .height)
+
+            return cardIsHeightItem &&
+                constraint.relation == .equal &&
+                abs(constraint.constant) == 430 &&
+                constraint.priority == .required
+        }
+
+        let hasVerticalSafetyConstraint = externalConstraints.contains { constraint in
+            let firstItem = constraint.firstItem
+            let secondItem = constraint.secondItem
+            let touchesCard =
+                (firstItem as AnyObject?) === cardView ||
+                (secondItem as AnyObject?) === cardView
+            let touchesSafeArea =
+                firstItem is UILayoutGuide || secondItem is UILayoutGuide
+            let isVerticalRelation: Bool = {
+                switch (constraint.firstAttribute, constraint.secondAttribute) {
+                case (.top, _), (.bottom, _), (.centerY, _), (.height, _), (_, .top), (_, .bottom), (_, .centerY), (_, .height):
+                    return true
+                default:
+                    return false
+                }
+            }()
+
+            return touchesCard && touchesSafeArea && isVerticalRelation
+        }
+
+        #expect(hasRequiredFixedHeight == false)
+        #expect(hasVerticalSafetyConstraint)
     }
 
 }

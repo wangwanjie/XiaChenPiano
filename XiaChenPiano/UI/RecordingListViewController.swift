@@ -80,10 +80,14 @@ final class RecordingListViewController: UIViewController {
         view.addSubview(cardView)
         cardView.snp.makeConstraints { make in
             make.center.equalToSuperview()
-            make.width.equalTo(520)
-            make.height.equalTo(430)
-            make.leading.greaterThanOrEqualTo(view.safeAreaLayoutGuide).offset(24)
-            make.trailing.lessThanOrEqualTo(view.safeAreaLayoutGuide).offset(-24)
+            make.width.equalTo(520).priority(.high)
+            make.width.lessThanOrEqualTo(view.safeAreaLayoutGuide).offset(-32)
+            make.height.equalTo(430).priority(.medium)
+            make.height.lessThanOrEqualTo(view.safeAreaLayoutGuide).offset(-24)
+            make.leading.greaterThanOrEqualTo(view.safeAreaLayoutGuide).offset(16)
+            make.trailing.lessThanOrEqualTo(view.safeAreaLayoutGuide).offset(-16)
+            make.top.greaterThanOrEqualTo(view.safeAreaLayoutGuide).offset(12)
+            make.bottom.lessThanOrEqualTo(view.safeAreaLayoutGuide).offset(-12)
         }
 
         let titleLabel = UILabel()
@@ -116,7 +120,7 @@ final class RecordingListViewController: UIViewController {
         tableView.separatorColor = UIColor.white.withAlphaComponent(0.08)
         tableView.dataSource = self
         tableView.delegate = self
-        tableView.rowHeight = 64
+        tableView.rowHeight = 60
         tableView.register(UITableViewCell.self, forCellReuseIdentifier: "cell")
 
         tableView.snp.makeConstraints { make in
@@ -170,7 +174,7 @@ final class RecordingListViewController: UIViewController {
 
         playbackPanel.snp.makeConstraints { make in
             make.leading.trailing.bottom.equalToSuperview()
-            make.height.equalTo(120)
+            make.height.equalTo(112)
         }
 
         selectedTitleLabel.snp.makeConstraints { make in
