@@ -19,11 +19,14 @@ final class PianoPracticeViewController: UIViewController {
     )
     private var recordings: [MelodyRecording]
     private var recordingSession: MelodyRecordingSession?
+    private lazy var playbackController = RecordingPlaybackController(soundPlayer: environment.soundPlayer)
+    private var hasPresentedPreview = false
 
     private let topTextureView = UIImageView()
     private let bottomTextureView = UIImageView()
     private let keyboardView = PianoKeyboardView()
     private let toastLabel = InsetLabel(contentInsets: UIEdgeInsets(top: 10, left: 18, bottom: 10, right: 18))
+    private weak var recordingListController: RecordingListViewController?
 
     private lazy var zoomOutButton = ToolbarActionButton(title: "缩小", image: UIImage(systemName: "minus"))
     private lazy var zoomInButton = ToolbarActionButton(title: "放大", image: UIImage(systemName: "plus"))
@@ -61,11 +64,13 @@ final class PianoPracticeViewController: UIViewController {
         applyTheme()
         reloadKeyboard()
         environment.soundPlayer.setMetronomeEnabled(settings.metronomeEnabled)
+        setupPlaybackController()
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         environment.practiceTracker.startSession()
+        presentPreviewIfNeeded()
     }
 
     override func viewSafeAreaInsetsDidChange() {
@@ -159,6 +164,22 @@ final class PianoPracticeViewController: UIViewController {
         }
     }
 
+    private func setupPlaybackController() {
+        playbackController.onNotePlayback = { [weak self] note in
+            self?.keyboardView.flashPlayback(note: note)
+        }
+        playbackController.onSnapshotChange = { [weak self] snapshot in
+            guard let self else { return }
+            self.recordingListController?.updatePlayback(snapshot)
+            if snapshot.state == .stopped,
+               let recording = snapshot.recording,
+               snapshot.progress >= snapshot.duration,
+               snapshot.duration > 0 {
+                self.showToast("播放完成：\(recording.title)")
+            }
+        }
+    }
+
     private func makeActionStack(_ buttons: [ToolbarActionButton]) -> UIStackView {
         let stack = UIStackView(arrangedSubviews: buttons)
         stack.axis = .horizontal
@@ -178,6 +199,7 @@ final class PianoPracticeViewController: UIViewController {
         let recordImageName = recordingSession == nil ? "record_off_Normal" : "record_on_Normal"
         recordButton.configure(title: recordingSession == nil ? "录音" : "保存", image: UIImage(named: recordImageName))
         environment.soundPlayer.setMetronomeEnabled(settings.metronomeEnabled)
+        playbackController.updateInstrument(settings.instrument)
         keyboardView.apply(viewport: viewport, settings: settings)
     }
 
@@ -207,6 +229,73 @@ final class PianoPracticeViewController: UIViewController {
                 self.toastLabel.alpha = 0
             }
         }
+    }
+
+    private func presentPreviewIfNeeded() {
+        guard hasPresentedPreview == false else {
+            return
+        }
+
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-uiPreviewPlaybackPanel") {
+            hasPresentedPreview = true
+            presentPlaybackPreview()
+        } else if arguments.contains("-uiPreviewSettings") {
+            hasPresentedPreview = true
+            presentSettingsPreview()
+        }
+    }
+
+    private func presentPlaybackPreview() {
+        let previewRecordings = makePreviewRecordings()
+        let controller = RecordingListViewController(recordings: previewRecordings)
+        controller.updatePlayback(
+            RecordingPlaybackSnapshot(
+                recording: previewRecordings.first,
+                state: .paused,
+                progress: 7.4,
+                duration: previewRecordings.first?.duration ?? 0
+            )
+        )
+        recordingListController = controller
+        present(controller, animated: false)
+    }
+
+    private func presentSettingsPreview() {
+        let controller = SettingsViewController(
+            settings: settings,
+            practiceDurationText: environment.practiceTracker.formattedPracticeDuration()
+        )
+        controller.onApply = { _ in }
+        present(controller, animated: false)
+    }
+
+    private func makePreviewRecordings() -> [MelodyRecording] {
+        [
+            MelodyRecording(
+                title: "小星星练习",
+                createdAt: Date(),
+                duration: 12,
+                events: [
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "111")!, offset: 0.0),
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "111")!, offset: 0.6),
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "211")!, offset: 1.2),
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "211")!, offset: 1.8),
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "224")!, offset: 2.4),
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "224")!, offset: 3.0)
+                ]
+            ),
+            MelodyRecording(
+                title: "和弦滑奏练习",
+                createdAt: Date().addingTimeInterval(-3600),
+                duration: 18,
+                events: [
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "321")!, offset: 0.3),
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "324")!, offset: 0.9),
+                    RecordedNoteEvent(note: PianoNote(sampleCode: "421")!, offset: 1.5)
+                ]
+            )
+        ]
     }
 
     @objc
@@ -253,13 +342,33 @@ final class PianoPracticeViewController: UIViewController {
     @objc
     private func handleRecordingList() {
         let controller = RecordingListViewController(recordings: recordings)
-        controller.onPlay = { [weak self] recording in
+        controller.updatePlayback(playbackController.snapshot)
+        controller.onPlayRequested = { [weak self] recording in
             guard let self else { return }
-            self.environment.soundPlayer.play(recording: recording, instrument: self.settings.instrument)
-            self.showToast("正在播放：\(recording.title)")
+            self.keyboardView.clearPlaybackHighlights()
+            if self.playbackController.snapshot.recording?.id == recording.id,
+               self.playbackController.snapshot.state == .paused {
+                self.playbackController.resumePlayback()
+                self.showToast("继续播放：\(recording.title)")
+            } else {
+                self.playbackController.startPlayback(recording: recording, instrument: self.settings.instrument)
+                self.showToast("正在播放：\(recording.title)")
+            }
+        }
+        controller.onPauseRequested = { [weak self] in
+            self?.keyboardView.clearPlaybackHighlights()
+            self?.playbackController.pausePlayback()
+        }
+        controller.onStopRequested = { [weak self] in
+            self?.keyboardView.clearPlaybackHighlights()
+            self?.playbackController.stopPlayback()
         }
         controller.onDelete = { [weak self, weak controller] recording in
             guard let self else { return }
+            if self.playbackController.snapshot.recording?.id == recording.id {
+                self.keyboardView.clearPlaybackHighlights()
+                self.playbackController.stopPlayback(clearSelection: true)
+            }
             self.recordings.removeAll { $0.id == recording.id }
             self.saveRecordings()
             controller?.updateRecordings(self.recordings)
@@ -272,7 +381,9 @@ final class PianoPracticeViewController: UIViewController {
             }
             self.saveRecordings()
             controller?.updateRecordings(self.recordings)
+            controller?.updatePlayback(self.playbackController.snapshot)
         }
+        recordingListController = controller
         present(controller, animated: true)
     }
 
@@ -284,9 +395,12 @@ final class PianoPracticeViewController: UIViewController {
             saveRecordings()
             self.recordingSession = nil
             applyTheme()
+            recordingListController?.updateRecordings(recordings)
             showToast("已保存 \(recording.title)")
         } else {
-            environment.soundPlayer.stopAll()
+            keyboardView.clearPlaybackHighlights()
+            playbackController.stopPlayback()
+            environment.soundPlayer.stopActiveNotes()
             recordingSession = MelodyRecordingSession()
             applyTheme()
             showToast("开始录音")

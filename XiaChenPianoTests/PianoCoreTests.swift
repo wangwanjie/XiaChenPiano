@@ -206,4 +206,60 @@ struct PianoCoreTests {
         #expect(cache.data(for: "piano111") == expected)
     }
 
+    @Test
+    func playbackTimelineTriggersNotesAsProgressAdvances() {
+        let recording = MelodyRecording(
+            title: "测试录音",
+            createdAt: Date(),
+            duration: 0.5,
+            events: [
+                RecordedNoteEvent(note: PianoNote(sampleCode: "111")!, offset: 0.1),
+                RecordedNoteEvent(note: PianoNote(sampleCode: "122")!, offset: 0.35)
+            ]
+        )
+        var timeline = RecordingPlaybackTimeline(recording: recording)
+
+        let firstStep = timeline.advance(by: 0.05)
+        let secondStep = timeline.advance(by: 0.10)
+        let thirdStep = timeline.advance(by: 0.25)
+        let finalStep = timeline.advance(by: 0.20)
+
+        #expect(firstStep.triggeredNotes.isEmpty)
+        #expect(abs(firstStep.progress - 0.05) < 0.0001)
+        #expect(firstStep.isFinished == false)
+
+        #expect(secondStep.triggeredNotes.map(\.sampleCode) == ["111"])
+        #expect(abs(secondStep.progress - 0.15) < 0.0001)
+        #expect(secondStep.isFinished == false)
+
+        #expect(thirdStep.triggeredNotes.map(\.sampleCode) == ["122"])
+        #expect(abs(thirdStep.progress - 0.40) < 0.0001)
+        #expect(thirdStep.isFinished == false)
+
+        #expect(finalStep.triggeredNotes.isEmpty)
+        #expect(abs(finalStep.progress - 0.5) < 0.0001)
+        #expect(finalStep.isFinished == true)
+    }
+
+    @Test
+    func playbackTimelineRestartResetsProgressAndTriggersNotesAgain() {
+        let recording = MelodyRecording(
+            title: "测试录音",
+            createdAt: Date(),
+            duration: 0.3,
+            events: [
+                RecordedNoteEvent(note: PianoNote(sampleCode: "111")!, offset: 0.1)
+            ]
+        )
+        var timeline = RecordingPlaybackTimeline(recording: recording)
+
+        _ = timeline.advance(by: 0.2)
+        timeline.restart()
+        let replayStep = timeline.advance(by: 0.15)
+
+        #expect(abs(timeline.progress - 0.15) < 0.0001)
+        #expect(replayStep.triggeredNotes.map(\.sampleCode) == ["111"])
+        #expect(replayStep.isFinished == false)
+    }
+
 }

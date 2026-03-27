@@ -56,12 +56,16 @@ final class SampledSoundPlayer {
         }
     }
 
-    func stopAll() {
+    func stopActiveNotes() {
         stopScheduledPlayback()
-        metronomeTimer?.invalidate()
-        metronomeTimer = nil
         activePlayers.forEach { $0.stop() }
         activePlayers.removeAll()
+    }
+
+    func stopAll() {
+        stopActiveNotes()
+        metronomeTimer?.invalidate()
+        metronomeTimer = nil
     }
 
     func setMetronomeEnabled(_ enabled: Bool) {

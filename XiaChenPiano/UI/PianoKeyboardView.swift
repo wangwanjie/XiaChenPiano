@@ -20,6 +20,9 @@ final class PianoKeyboardView: UIView {
     private var touchTracker = PianoTouchTracker<ObjectIdentifier, ObjectIdentifier>()
     private var buttonsByIdentifier: [ObjectIdentifier: PianoKeyButton] = [:]
     private var notesByButtonIdentifier: [ObjectIdentifier: PianoNote] = [:]
+    private var buttonIdentifiersByNote: [PianoNote: ObjectIdentifier] = [:]
+    private var touchPressedKeys: Set<ObjectIdentifier> = []
+    private var playbackPressedKeyCounts: [ObjectIdentifier: Int] = [:]
 
     private let whiteLabelColor = UIColor(white: 0.55, alpha: 1)
     private let blackPressedImage = UIImage(named: "black_pushed_Normal")
@@ -52,12 +55,31 @@ final class PianoKeyboardView: UIView {
         rebuildKeys()
     }
 
+    func flashPlayback(note: PianoNote, duration: TimeInterval = 0.18) {
+        guard let keyID = buttonIdentifiersByNote[note] else {
+            return
+        }
+
+        beginPlaybackHighlight(for: keyID)
+        DispatchQueue.main.asyncAfter(deadline: .now() + duration) { [weak self] in
+            self?.endPlaybackHighlight(for: keyID)
+        }
+    }
+
+    func clearPlaybackHighlights() {
+        playbackPressedKeyCounts.removeAll()
+        buttonsByIdentifier.keys.forEach(refreshPressedState(for:))
+    }
+
     private func rebuildKeys() {
-        subviews.compactMap { $0 as? PianoKeyButton }.forEach { $0.isPressed = false }
+        subviews.compactMap { $0 as? PianoKeyButton }.forEach { $0.setTouchPressed(false); $0.setPlaybackPressed(false) }
         subviews.forEach { $0.removeFromSuperview() }
         touchTracker.reset()
         buttonsByIdentifier.removeAll()
         notesByButtonIdentifier.removeAll()
+        buttonIdentifiersByNote.removeAll()
+        touchPressedKeys.removeAll()
+        playbackPressedKeyCounts.removeAll()
         guard bounds.width > 0, bounds.height > 0 else {
             return
         }
@@ -108,6 +130,7 @@ final class PianoKeyboardView: UIView {
         button.isUserInteractionEnabled = false
         buttonsByIdentifier[identifier] = button
         notesByButtonIdentifier[identifier] = note
+        buttonIdentifiersByNote[note] = identifier
 
         if isWhiteKey {
             button.setBackgroundImage(whiteImage, for: .normal)
@@ -160,11 +183,13 @@ final class PianoKeyboardView: UIView {
 
     private func apply(_ change: PianoTouchChange<ObjectIdentifier>) {
         for keyID in change.releasedKeys {
-            buttonsByIdentifier[keyID]?.isPressed = false
+            touchPressedKeys.remove(keyID)
+            refreshPressedState(for: keyID)
         }
 
         for keyID in change.pressedKeys {
-            buttonsByIdentifier[keyID]?.isPressed = true
+            touchPressedKeys.insert(keyID)
+            refreshPressedState(for: keyID)
         }
 
         for keyID in change.triggeredKeys {
@@ -181,17 +206,36 @@ final class PianoKeyboardView: UIView {
         }
         return ObjectIdentifier(button)
     }
+
+    private func beginPlaybackHighlight(for keyID: ObjectIdentifier) {
+        playbackPressedKeyCounts[keyID, default: 0] += 1
+        refreshPressedState(for: keyID)
+    }
+
+    private func endPlaybackHighlight(for keyID: ObjectIdentifier) {
+        let nextCount = max((playbackPressedKeyCounts[keyID] ?? 0) - 1, 0)
+        if nextCount == 0 {
+            playbackPressedKeyCounts.removeValue(forKey: keyID)
+        } else {
+            playbackPressedKeyCounts[keyID] = nextCount
+        }
+        refreshPressedState(for: keyID)
+    }
+
+    private func refreshPressedState(for keyID: ObjectIdentifier) {
+        guard let button = buttonsByIdentifier[keyID] else {
+            return
+        }
+        button.setTouchPressed(touchPressedKeys.contains(keyID))
+        button.setPlaybackPressed((playbackPressedKeyCounts[keyID] ?? 0) > 0)
+    }
 }
 
 private final class PianoKeyButton: UIButton {
     private let isWhiteKeyStyle: Bool
     private let pressedOverlay = UIView()
-
-    var isPressed = false {
-        didSet {
-            updatePressedAppearance()
-        }
-    }
+    private var isTouchPressed = false
+    private var isPlaybackPressed = false
 
     init(isWhiteKey: Bool) {
         self.isWhiteKeyStyle = isWhiteKey
@@ -207,6 +251,16 @@ private final class PianoKeyButton: UIButton {
     override func layoutSubviews() {
         super.layoutSubviews()
         pressedOverlay.frame = bounds
+    }
+
+    func setTouchPressed(_ isPressed: Bool) {
+        isTouchPressed = isPressed
+        updatePressedAppearance()
+    }
+
+    func setPlaybackPressed(_ isPressed: Bool) {
+        isPlaybackPressed = isPressed
+        updatePressedAppearance()
     }
 
     private func setupAppearance() {
@@ -233,6 +287,7 @@ private final class PianoKeyButton: UIButton {
     }
 
     private func updatePressedAppearance() {
+        let isPressed = isTouchPressed || isPlaybackPressed
         if isWhiteKeyStyle {
             pressedOverlay.alpha = isPressed ? 1 : 0
             layer.shadowOpacity = isPressed ? 0.02 : 0.08
