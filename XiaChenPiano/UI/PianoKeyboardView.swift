@@ -16,6 +16,7 @@ final class PianoKeyboardView: UIView {
         startWhiteKeyIndex: 0
     )
     private var settings = PracticeSettings.default
+    private var contentInsets = UIEdgeInsets.zero
     private var lastLaidOutSize: CGSize = .zero
     private var touchTracker = PianoTouchTracker<ObjectIdentifier, ObjectIdentifier>()
     private var buttonsByIdentifier: [ObjectIdentifier: PianoKeyButton] = [:]
@@ -55,6 +56,14 @@ final class PianoKeyboardView: UIView {
         rebuildKeys()
     }
 
+    func setContentInsets(_ insets: UIEdgeInsets) {
+        guard contentInsets != insets else {
+            return
+        }
+        contentInsets = insets
+        rebuildKeys()
+    }
+
     func flashPlayback(note: PianoNote, duration: TimeInterval = 0.18) {
         guard let keyID = buttonIdentifiersByNote[note] else {
             return
@@ -84,19 +93,24 @@ final class PianoKeyboardView: UIView {
             return
         }
 
+        let layoutBounds = bounds.inset(by: contentInsets)
+        guard layoutBounds.width > 0, layoutBounds.height > 0 else {
+            return
+        }
+
         let whiteNotes = MusicCatalog.whiteNotes(for: viewport)
         let blackNotes = MusicCatalog.blackNotes(for: viewport)
-        let whiteKeyWidth = bounds.width / CGFloat(max(whiteNotes.count, 1))
+        let whiteKeyWidth = layoutBounds.width / CGFloat(max(whiteNotes.count, 1))
         let blackKeyWidth = whiteKeyWidth * 0.56
-        let blackKeyHeight = bounds.height * 0.62
+        let blackKeyHeight = layoutBounds.height * 0.62
 
         for (index, note) in whiteNotes.enumerated() {
             let button = keyButton(for: note, isWhiteKey: true)
             let frame = CGRect(
-                x: CGFloat(index) * whiteKeyWidth,
-                y: 0,
+                x: layoutBounds.minX + CGFloat(index) * whiteKeyWidth,
+                y: layoutBounds.minY,
                 width: whiteKeyWidth + 0.5,
-                height: bounds.height
+                height: layoutBounds.height
             )
             button.frame = frame.integral
             if settings.showNoteLabels {
@@ -115,9 +129,9 @@ final class PianoKeyboardView: UIView {
 
         for note in blackNotes {
             let leadingVisibleIndex = note.leadingWhiteKeyIndex - viewport.startWhiteKeyIndex
-            let xPosition = CGFloat(leadingVisibleIndex + 1) * whiteKeyWidth - blackKeyWidth / 2.0
+            let xPosition = layoutBounds.minX + CGFloat(leadingVisibleIndex + 1) * whiteKeyWidth - blackKeyWidth / 2.0
             let button = keyButton(for: note, isWhiteKey: false)
-            button.frame = CGRect(x: xPosition, y: 0, width: blackKeyWidth, height: blackKeyHeight).integral
+            button.frame = CGRect(x: xPosition, y: layoutBounds.minY, width: blackKeyWidth, height: blackKeyHeight).integral
             addSubview(button)
         }
     }

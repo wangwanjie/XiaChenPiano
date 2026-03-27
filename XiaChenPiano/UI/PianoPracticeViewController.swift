@@ -24,10 +24,13 @@ final class PianoPracticeViewController: UIViewController {
 
     private let topTextureView = UIImageView()
     private let bottomTextureView = UIImageView()
+    private let keyboardBackgroundView = UIImageView()
     private let toolbarContentView = UIView()
     private let keyboardView = PianoKeyboardView()
     private let toastLabel = InsetLabel(contentInsets: UIEdgeInsets(top: 10, left: 18, bottom: 10, right: 18))
     private weak var recordingListController: RecordingListViewController?
+    private var toolbarLeadingConstraint: Constraint?
+    private var toolbarTrailingConstraint: Constraint?
 
     private lazy var zoomOutButton = ToolbarActionButton(title: "缩小", image: UIImage(systemName: "minus"))
     private lazy var zoomInButton = ToolbarActionButton(title: "放大", image: UIImage(systemName: "plus"))
@@ -68,6 +71,15 @@ final class PianoPracticeViewController: UIViewController {
         setupPlaybackController()
     }
 
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+
+        coordinator.animate { _ in
+        } completion: { [weak self] _ in
+            self?.applyLandscapeSafeAreaInsets()
+        }
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         environment.practiceTracker.startSession()
@@ -79,6 +91,7 @@ final class PianoPracticeViewController: UIViewController {
         bottomTextureView.snp.updateConstraints { make in
             make.height.equalTo(max(view.safeAreaInsets.bottom + 24, 34))
         }
+        applyLandscapeSafeAreaInsets()
     }
 
     override func viewWillDisappear(_ animated: Bool) {
@@ -92,10 +105,13 @@ final class PianoPracticeViewController: UIViewController {
         topTextureView.contentMode = .scaleAspectFill
         topTextureView.clipsToBounds = true
         topTextureView.isUserInteractionEnabled = true
+        keyboardBackgroundView.contentMode = .scaleToFill
+        keyboardBackgroundView.clipsToBounds = true
         bottomTextureView.contentMode = .scaleAspectFill
         bottomTextureView.clipsToBounds = true
 
         view.addSubview(topTextureView)
+        view.addSubview(keyboardBackgroundView)
         view.addSubview(bottomTextureView)
         view.addSubview(toolbarContentView)
         view.addSubview(keyboardView)
@@ -116,14 +132,21 @@ final class PianoPracticeViewController: UIViewController {
             make.height.equalTo(34)
         }
 
+        keyboardBackgroundView.snp.makeConstraints { make in
+            make.top.equalTo(topTextureView.snp.bottom)
+            make.leading.trailing.equalToSuperview()
+            make.bottom.equalTo(bottomTextureView.snp.top)
+        }
+
         toolbarContentView.snp.makeConstraints { make in
             make.top.bottom.equalTo(topTextureView)
-            make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
+            toolbarLeadingConstraint = make.leading.equalToSuperview().constraint
+            toolbarTrailingConstraint = make.trailing.equalToSuperview().constraint
         }
 
         keyboardView.snp.makeConstraints { make in
             make.top.equalTo(topTextureView.snp.bottom)
-            make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
+            make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(bottomTextureView.snp.top)
         }
 
@@ -181,7 +204,8 @@ final class PianoPracticeViewController: UIViewController {
             if snapshot.state == .stopped,
                let recording = snapshot.recording,
                snapshot.progress >= snapshot.duration,
-               snapshot.duration > 0 {
+               snapshot.duration > 0
+            {
                 self.showToast("播放完成：\(recording.title)")
             }
         }
@@ -201,6 +225,7 @@ final class PianoPracticeViewController: UIViewController {
 
     private func applyTheme() {
         topTextureView.image = UIImage(named: settings.theme.toolbarTextureName)
+        keyboardBackgroundView.image = UIImage(named: settings.theme.footerTextureName)
         bottomTextureView.image = UIImage(named: settings.theme.footerTextureName)
         instrumentButton.configure(title: settings.instrument.displayName, image: UIImage(systemName: "music.note"))
         let recordImageName = recordingSession == nil ? "record_off_Normal" : "record_on_Normal"
@@ -208,10 +233,23 @@ final class PianoPracticeViewController: UIViewController {
         environment.soundPlayer.setMetronomeEnabled(settings.metronomeEnabled)
         playbackController.updateInstrument(settings.instrument)
         keyboardView.apply(viewport: viewport, settings: settings)
+        applyLandscapeSafeAreaInsets()
     }
 
     private func reloadKeyboard() {
         keyboardView.apply(viewport: viewport, settings: settings)
+        applyLandscapeSafeAreaInsets()
+    }
+
+    private func applyLandscapeSafeAreaInsets() {
+        let contentInsets = Self.notchAvoidanceInsets(
+            for: view.safeAreaInsets,
+            interfaceOrientation: view.window?.windowScene?.interfaceOrientation ?? preferredInterfaceOrientationForPresentation
+        )
+
+        toolbarLeadingConstraint?.update(offset: contentInsets.left)
+        toolbarTrailingConstraint?.update(offset: -contentInsets.right)
+        keyboardView.setContentInsets(contentInsets)
     }
 
     private func play(note: PianoNote) {
@@ -354,7 +392,8 @@ final class PianoPracticeViewController: UIViewController {
             guard let self else { return }
             self.keyboardView.clearPlaybackHighlights()
             if self.playbackController.snapshot.recording?.id == recording.id,
-               self.playbackController.snapshot.state == .paused {
+               self.playbackController.snapshot.state == .paused
+            {
                 self.playbackController.resumePlayback()
                 self.showToast("继续播放：\(recording.title)")
             } else {
@@ -428,6 +467,27 @@ final class PianoPracticeViewController: UIViewController {
             self.reloadKeyboard()
         }
         present(controller, animated: true)
+    }
+}
+
+extension PianoPracticeViewController {
+    static func notchAvoidanceInsets(for safeAreaInsets: UIEdgeInsets, interfaceOrientation: UIInterfaceOrientation) -> UIEdgeInsets {
+        let horizontalInset = max(safeAreaInsets.left, safeAreaInsets.right)
+
+        switch interfaceOrientation {
+        case .landscapeLeft:
+            return UIEdgeInsets(top: 0, left: 0, bottom: 0, right: horizontalInset)
+
+        case .landscapeRight:
+            return UIEdgeInsets(top: 0, left: horizontalInset, bottom: 0, right: 0)
+
+        default:
+            if safeAreaInsets.left > safeAreaInsets.right {
+                return UIEdgeInsets(top: 0, left: horizontalInset, bottom: 0, right: 0)
+            } else {
+                return UIEdgeInsets(top: 0, left: 0, bottom: 0, right: horizontalInset)
+            }
+        }
     }
 }
 
