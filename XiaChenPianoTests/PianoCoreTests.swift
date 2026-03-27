@@ -319,4 +319,50 @@ struct PianoCoreTests {
         #expect(hasVerticalSafetyConstraint)
     }
 
+    @MainActor
+    @Test
+    func practiceScreenUsesSafeAreaForToolbarAndKeyboardHorizontally() throws {
+        let viewController = PianoPracticeViewController()
+
+        viewController.loadViewIfNeeded()
+
+        let mirror = Mirror(reflecting: viewController)
+        let keyboardView = try #require(mirror.descendant("keyboardView") as? UIView)
+        let toolbarContentView = try #require(mirror.descendant("toolbarContentView") as? UIView)
+
+        let rootConstraints = viewController.view.constraints
+        let keyboardUsesHorizontalSafeArea = rootConstraints.contains { constraint in
+            let touchesKeyboard =
+                (constraint.firstItem as AnyObject?) === keyboardView ||
+                (constraint.secondItem as AnyObject?) === keyboardView
+            let touchesSafeArea =
+                constraint.firstItem is UILayoutGuide || constraint.secondItem is UILayoutGuide
+            let isHorizontal =
+                constraint.firstAttribute == .leading ||
+                constraint.firstAttribute == .trailing ||
+                constraint.secondAttribute == .leading ||
+                constraint.secondAttribute == .trailing
+
+            return touchesKeyboard && touchesSafeArea && isHorizontal
+        }
+
+        let toolbarUsesSafeArea = rootConstraints.contains { constraint in
+            let touchesToolbar =
+                (constraint.firstItem as AnyObject?) === toolbarContentView ||
+                (constraint.secondItem as AnyObject?) === toolbarContentView
+            let touchesSafeArea =
+                constraint.firstItem is UILayoutGuide || constraint.secondItem is UILayoutGuide
+            let isHorizontal =
+                constraint.firstAttribute == .leading ||
+                constraint.firstAttribute == .trailing ||
+                constraint.secondAttribute == .leading ||
+                constraint.secondAttribute == .trailing
+
+            return touchesToolbar && touchesSafeArea && isHorizontal
+        }
+
+        #expect(keyboardUsesHorizontalSafeArea)
+        #expect(toolbarUsesSafeArea)
+    }
+
 }

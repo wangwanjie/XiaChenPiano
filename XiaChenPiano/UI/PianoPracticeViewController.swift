@@ -24,6 +24,7 @@ final class PianoPracticeViewController: UIViewController {
 
     private let topTextureView = UIImageView()
     private let bottomTextureView = UIImageView()
+    private let toolbarContentView = UIView()
     private let keyboardView = PianoKeyboardView()
     private let toastLabel = InsetLabel(contentInsets: UIEdgeInsets(top: 10, left: 18, bottom: 10, right: 18))
     private weak var recordingListController: RecordingListViewController?
@@ -96,13 +97,14 @@ final class PianoPracticeViewController: UIViewController {
 
         view.addSubview(topTextureView)
         view.addSubview(bottomTextureView)
+        view.addSubview(toolbarContentView)
         view.addSubview(keyboardView)
         view.addSubview(toastLabel)
 
         let leftStack = makeActionStack([zoomOutButton, zoomInButton, moveLeftButton, moveRightButton])
         let rightStack = makeActionStack([instrumentButton, recordingsButton, recordButton, settingsButton])
-        topTextureView.addSubview(leftStack)
-        topTextureView.addSubview(rightStack)
+        toolbarContentView.addSubview(leftStack)
+        toolbarContentView.addSubview(rightStack)
 
         topTextureView.snp.makeConstraints { make in
             make.top.leading.trailing.equalToSuperview()
@@ -114,9 +116,14 @@ final class PianoPracticeViewController: UIViewController {
             make.height.equalTo(34)
         }
 
+        toolbarContentView.snp.makeConstraints { make in
+            make.top.bottom.equalTo(topTextureView)
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
+        }
+
         keyboardView.snp.makeConstraints { make in
             make.top.equalTo(topTextureView.snp.bottom)
-            make.leading.trailing.equalToSuperview()
+            make.leading.trailing.equalTo(view.safeAreaLayoutGuide)
             make.bottom.equalTo(bottomTextureView.snp.top)
         }
 
